@@ -146,13 +146,34 @@ def dump_ak_array(
         pq.write_table(pa_table, destination)
 
 
+# Branches named differently in data and MC: the parquet always stores them under the
+# plain name, taken from whichever of name / name_nom is in the ROOT file.
+UNIFIED_BRANCHES = ["vbfjet1_pt", "vbfjet2_pt"]
+
+
+def unify_branch_names(akarr):
+    """Rename <name>_nom to <name> for UNIFIED_BRANCHES when only the _nom version exists."""
+    fields = akarr.fields
+    renames = {
+        f"{name}_nom": name
+        for name in UNIFIED_BRANCHES
+        if name not in fields and f"{name}_nom" in fields
+    }
+    for name in UNIFIED_BRANCHES:
+        if name not in fields and f"{name}_nom" not in fields:
+            logging.warning(f"Neither {name} nor {name}_nom found in the ROOT tree")
+    if not renames:
+        return akarr
+    return ak.zip({renames.get(n, n): akarr[n] for n in fields}, depth_limit=1)
+
+
 def root_to_parquet(root_files, dest_file, tree_name):
     """Read a tree from one or more ROOT files and write it as a single parquet file."""
     logging.info(f"Converting {len(root_files)} ROOT file(s) -> {dest_file.name}")
     arrays = []
     for rf in root_files:
         with uproot.open(rf) as f:
-            arrays.append(f[tree_name].arrays())
+            arrays.append(unify_branch_names(f[tree_name].arrays()))
     akarr = ak.concatenate(arrays) if len(arrays) > 1 else arrays[0]
     dump_ak_array(akarr, dest_file.name, str(dest_file.parent))
     logging.info(f"Converted -> {dest_file} ({len(akarr)} rows)")
@@ -184,6 +205,34 @@ def preprocessing(src_file, dest_file, era, sample=None, channel=None):
         return False
 
 
+def unified_schema(files):
+    """Union of the columns of all files, e.g. LHE branches that only some samples have.
+
+    A column stored with different types across samples (e.g. topKinWeight as int32 and float)
+    is promoted to a common type (here double); align_table casts each file to it.
+    """
+    schemas = []
+    for f in files:
+        try:
+            schemas.append(pq.read_schema(f).remove_metadata())
+        except Exception as e:
+            logging.error(f"Failed to read schema of {f}: {e}")
+    return pa.unify_schemas(schemas, promote_options="permissive") if schemas else None
+
+
+def align_table(table, schema, name):
+    """Order the columns as in schema and fill the ones missing in this file with nulls."""
+    missing = [col for col in schema.names if col not in table.column_names]
+    if missing:
+        logging.warning(f"{name}: {len(missing)} column(s) missing, filled with nulls: {', '.join(missing)}")
+    columns = [
+        table.column(col).cast(schema.field(col).type) if col in table.column_names
+        else pa.nulls(table.num_rows, schema.field(col).type)
+        for col in schema.names
+    ]
+    return pa.Table.from_arrays(columns, schema=schema)
+
+
 def merge_files(files, target_file):
     """Merge multiple parquet files and check the number of entries."""
     logging.info(f"Merging {len(files)} files into {target_file.name}")
@@ -192,6 +241,7 @@ def merge_files(files, target_file):
     total_after = 0
     target_file.parent.mkdir(parents=True, exist_ok=True)
 
+    schema = unified_schema(files)
     writer = None
     try:
         for f in files:
@@ -199,9 +249,9 @@ def merge_files(files, target_file):
                 nrows = row_count(f)
                 total_before += nrows
                 logging.info(f"Reading {f.name} ({nrows} rows)")
-                table = pq.read_table(f)
+                table = align_table(pq.read_table(f), schema, f.name)
                 if writer is None:
-                    writer = pq.ParquetWriter(target_file, table.schema)
+                    writer = pq.ParquetWriter(target_file, schema)
                 writer.write_table(table)
                 total_after += table.num_rows
             except Exception as e:

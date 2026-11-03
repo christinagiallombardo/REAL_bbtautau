@@ -257,10 +257,10 @@ def write_input_files(project, out_dir, ntuple_categories=None):
             "source_dir": os.path.join(era_cfg["ntuple_dir"]),
             "sample_paths": sample_paths(era, era_cfg["sample_path"], ntuple_categories),
             "destination_dir": os.path.join(storage["real_base"], "processed", era, "{channel}_{ff_process}"),
+            # Only the channels listed under data are written; preprocessing skips the others.
             "source_files": {
-                "tt_data": era_cfg["data"]["tt"],
-                "mt_data": era_cfg["data"]["mt"],
-                "et_data": era_cfg["data"]["et"],
+                **{f"{channel}_data": era_cfg["data"][channel]
+                   for channel in ("tt", "mt", "et") if era_cfg.get("data", {}).get(channel)},
                 "mc": era_cfg["mc"],
             },
         }
@@ -320,18 +320,26 @@ def vs_jet_wps(cfg, channel):
     return cfg["tau_vs_jet"][channel]
 
 
+def iso_inclusive(cfg, channel):
+    # iso_inclusive: true puts the iso_min boundary in iso (>=) instead of anti-iso (<=).
+    return vs_jet_wps(cfg, channel).get("iso_inclusive", False)
+
+
 def iso_cut(cfg, channel, index):
-    return f"({tau_id(cfg, 'wp_jet', index)} > {vs_jet_wps(cfg, channel)['iso_min']})"
+    op = ">=" if iso_inclusive(cfg, channel) else ">"
+    return f"({tau_id(cfg, 'wp_jet', index)} {op} {vs_jet_wps(cfg, channel)['iso_min']})"
 
 
 def antiiso_cut(cfg, channel, index):
     low, high = vs_jet_wps(cfg, channel)["antiiso_range"]
     vs_jet = tau_id(cfg, "wp_jet", index)
-    return f"({vs_jet} <= {high}) & ({vs_jet} >= {low})"
+    op = "<" if iso_inclusive(cfg, channel) else "<="
+    return f"({vs_jet} {op} {high}) & ({vs_jet} >= {low})"
 
 
 def not_iso_cut(cfg, channel, index):
-    return f"({tau_id(cfg, 'wp_jet', index)} <= {vs_jet_wps(cfg, channel)['iso_min']})"
+    op = "<" if iso_inclusive(cfg, channel) else "<="
+    return f"({tau_id(cfg, 'wp_jet', index)} {op} {vs_jet_wps(cfg, channel)['iso_min']})"
 
 
 OTHER_TAU_CUTS = {"iso": iso_cut, "antiiso": antiiso_cut, "not_iso": not_iso_cut}

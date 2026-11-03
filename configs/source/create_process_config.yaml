@@ -24,31 +24,42 @@
 branches:
   # Say how you define opposite-sign vs same-sign events.
   charge:
-    name: os
+    name: isOS
     opposite_sign: 1
     same_sign: 0
 
   # Define working points (DeepTau, ParticleNet, UParT). {index} is replaced by the leg number (1, 2) defined elsewhere
   tau_id:
-    wp_jet: idDeepTau2018v2p5VSjet_{index}
-    wp_ele: idDeepTau2018v2p5VSe_{index}
-    wp_mu: idDeepTau2018v2p5VSmu_{index}
+    wp_jet: dau{index}_rawDeepTau2018v2p5VSjet
+    wp_ele: dau{index}_rawDeepTau2018v2p5VSe
+    wp_mu: dau{index}_rawDeepTau2018v2p5VSmu
 
-  lepton_iso: iso_1            # relative isolation of the light lepton (mt, et)
+  lepton_iso: dau1_pfRelIso04_all         # relative isolation of the light lepton (mt, et)
   electron_id: e_pass90_1      # electron ID flag (et)
-  mt: mt_1                    # transverse mass
+  mt: mT                    # transverse mass
   n_bjets: n_bjets
   wjets_score: Wjets_pred_score
-  gen_match: genPartFlav_{index}   # 0 = jet -> tau fake
-  preweight: total_weight  # define total weight for scaling in preprocessing step
+  gen_match: dau{index}_genPartFlav  # 0 = jet -> tau fake
+  preweight: genWeight * puWeight * topKinWeight * idAndIsoAndFakeSF  # define total weight for scaling in preprocessing step
   weight: wt_sf                # event weight; its sign splits mc_* and mc_*_neg
-  extra: # add extra information if needed
+  extra: pairType
 
+
+# -------------------------------------------------------------------------------------
+# 1b. Ntuple categories
+#    With loop: true, each sample is read from every category listed under names, and preprocessing
+#    writes one parquet file per category, e.g. data_all_events_Run3_2024_cat_res1b.parquet. In eras.<era>.sample_path (create_project_config.yaml),
+#    {category} is replaced by each category name and {file} by that category's ROOT file, e.g.
+#        sample_path: "{sample}/{category}/Prod_26_04/{file}"
+#    The file can be a single name, a glob pattern (data_[0-9]*.root) or a list of these.
+#    With loop: false, the {category} level is removed from sample_path, so the example above reads
+#    "{sample}/Prod_26_04/{file}", and {file} is replaced by file below.
+# -------------------------------------------------------------------------------------
 ntuple_categories:
-  loop: true   # If true, the ntuple categories are read from the input files. If false, the ntuple categories are read from the names block below. 
-  file: data_0.root  # ROOT file used when loop is false
+  loop: true
+  file: data_0.root            # ROOT file used when loop is false
   names:
-    cat_res1b: data_0.root # category name: root file name
+    cat_res1b: data_0.root
     cat_res2b: data_0.root
 
 # -------------------------------------------------------------------------------------
@@ -72,58 +83,52 @@ default_era_group: EarlyRun3
 triggers:
   tt:
     doubletau:
-      flag: trg_doubletau
+      flag: HLT_DoublePNetTauhPFJet30_Medium_L2NN_eta2p3
       cuts:
-        EarlyRun3: ["pt_1 > 40", "pt_2 > 40"]
-        Run3_2024: ["pt_1 > 35", "pt_2 > 35"]
+        EarlyRun3: ["dau1_pt > 40", "dau2_pt > 40"]
+        Run3_2024: ["dau1_pt > 35", "dau2_pt > 35"]
     doubletauandjet:
-      flag: trg_doubletauandjet
+      flag: HLT_DoublePNetTauhPFJet26_L2NN_eta2p3_PFJet60
       cuts:
-        EarlyRun3: ["pt_1 > 35", "pt_2 > 35", "pt_1 < 190", "pt_2 < 190", "jpt_1 > 60"]
-        Run3_2024: ["pt_1 > 31", "pt_2 > 31", "pt_1 < 140", "pt_2 < 140", "jpt_1 > 60"]
-    singletau:
-      flag: trg_singletau
-      cuts:
-        EarlyRun3: ["pt_1 > 190"]
-        Run3_2024: ["pt_1 > 140"]
-    singletau_2:
-      flag: trg_singletau_2
-      cuts:
-        EarlyRun3: ["pt_2 > 190"]
-        Run3_2024: ["pt_2 > 140"]
+        EarlyRun3: ["dau1_pt > 35", "dau2_pt > 35", "dau1_pt < 190", "dau2_pt < 190", "vbfjet1_pt > 60"]
+        Run3_2024: ["dau1_pt > 31", "dau2_pt > 31", "dau1_pt < 140", "dau2_pt < 140", "vbfjet1_pt > 60"]
 
   mt:
     mt_cross:
-      flag: trg_mt_cross
-      cuts: ["pt_1 > 21", "pt_1 <= 26", "abs(eta_1) < 2.1", "pt_2 > 32", "abs(eta_2) < 2.1"]
+      flag: HLT_IsoMu20_eta2p1_PNetTauhPFJet27_Loose_eta2p3_CrossL1
+      cuts: ["dau1_pt > 21", "dau1_pt <= 26", "abs(dau1_eta) < 2.1", "dau2_pt > 32", "abs(dau2_eta) < 2.1"]
     singlemuon:
-      flag: trg_singlemuon
-      cuts: ["pt_1 > 26", "abs(eta_1) < 2.4"]
+      flag: HLT_IsoMu24
+      cuts: ["dau1_pt > 26", "abs(dau1_eta) < 2.4"]
 
   et:
     singleelectron:
-      flag: trg_singleelectron
-      cuts: ["pt_1 > 31", "abs(eta_1) < 2.1"]
+      flag: HLT_Ele30_WPTight_Gsf
+      cuts: ["dau1_pt > 31", "abs(dau1_eta) < 2.1"]
 
 
 # -------------------------------------------------------------------------------------
 # 4. Tau ID working points
 # -------------------------------------------------------------------------------------
-tau_vs_jet:
-  iso_min: 4                   # isolated (iso):       VSjet > iso_min
-  antiiso_range: [0, 4]        # anti-isolated (aiso): 0 <= VSjet <= 4   (inclusive)
+# VSjet cuts per channel:
+#   isolated (iso):       VSjet > iso_min
+#   anti-isolated (aiso): low <= VSjet <= high   (antiiso_range: [low, high], inclusive)
+# With iso_inclusive: true the iso_min boundary belongs to iso instead:
+#   iso:  VSjet >= iso_min      aiso: low <= VSjet < high      not_iso: VSjet < iso_min
+# Current WPs: iso = Medium (0.9600), aiso = VVVLoose (0.3569) <= VSjet < Medium.
+tau_vs_jet: {iso_min: 0.9600, antiiso_range: [0.3569, 0.9600], iso_inclusive: true}
 
 # Anti-lepton working points applied in every region of a channel: {leg: WP}, cut is >=.
 anti_lepton:
   tt:
-    wp_ele: {1: 2, 2: 2}
-    wp_mu: {1: 1, 2: 1}
+    wp_ele: {1: 0.1754, 2: 0.1754}
+    wp_mu: {1: 0.4432, 2: 0.3569}
   mt:
-    wp_ele: {2: 2}
-    wp_mu: {2: 4}
+    wp_ele: {2: 0.5910}
+    wp_mu: {2: 0.9360}
   et:
-    wp_ele: {2: 6}
-    wp_mu: {2: 4}
+    wp_ele: {2: 0.1754}
+    wp_mu: {2: 0.9360}
 
 
 # -------------------------------------------------------------------------------------
@@ -159,17 +164,22 @@ processes:
     input_files:
       mc: mc_all_events_{era}.parquet
       data: data_all_events_{era}.parquet
-    output_dir: data_January26/{era}/{region}_region/QCD/
+    output_dir: post_processed/{era}/{region}_region/QCD/
     split_by_era_group: true
+    # tt, subleading pass (measured tau = dau2, other tau = dau1); genPartFlav != 0 is on MC only:
+    #   SS iso    = determination data_iso:  isOS == 0, dau1 >= Medium, dau2 >= Medium
+    #   SS inviso = determination data_aiso: isOS == 0, dau1 >= Medium, VVVLoose <= dau2 < Medium
+    #   OS iso    = validation data_iso:     isOS == 1, dau1 >= Medium, dau2 >= Medium
+    #   OS inviso = validation data_aiso:    isOS == 1, dau1 >= Medium, VVVLoose <= dau2 < Medium
     regions:
       determination:
-        tt: {charge: same_sign, other_tau: iso}
-        mt: {charge: same_sign, mt: {max: 65}, lepton_iso: {min: 0.05, max: 0.15}}
-        et: {charge: same_sign, mt: {max: 65}, electron_id: pass, lepton_iso: {min: 0.05, max: 0.15}}
+        tt: {charge: same_sign, other_tau: iso, extra: "2"}
+        mt: {charge: same_sign, mt: {max: 65}, lepton_iso: {min: 0.05, max: 0.15}, extra: "0"}
+        et: {charge: same_sign, mt: {max: 65}, electron_id: pass, lepton_iso: {min: 0.05, max: 0.15}, extra: "1"}
       validation:
-        tt: {charge: opposite_sign, other_tau: not_iso}
-        mt: {charge: same_sign, mt: {max: 65}, lepton_iso: {min: 0.25, max: 0.5}}
-        et: {charge: same_sign, mt: {max: 65}, electron_id: pass, lepton_iso: {min: 0.25, max: 0.5}}
+        tt: {charge: opposite_sign, other_tau: iso, extra: "2"}
+        mt: {charge: same_sign, mt: {max: 65}, lepton_iso: {min: 0.25, max: 0.5}, extra: "0"}
+        et: {charge: same_sign, mt: {max: 65}, electron_id: pass, lepton_iso: {min: 0.25, max: 0.5}, extra: "1"}
     era_group_overrides:
       # Reproduces the current EarlyRun3 et validation region (failing electron ID, no lower iso bound).
       # Differs from Run3_2024; check whether this is intended.
@@ -189,8 +199,8 @@ processes:
     split_by_era_group: false
     regions:
       determination:
-        mt: {charge: opposite_sign, wjets_score: {min: 0.15}, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}}
-        et: {charge: opposite_sign, wjets_score: {min: 0.15}, electron_id: pass, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}}
+        mt: {charge: opposite_sign, wjets_score: {min: 0.15}, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}, extra: "0"}
+        et: {charge: opposite_sign, wjets_score: {min: 0.15}, electron_id: pass, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}, extra: "1"}
     selections:
       samples: [data, mc]
       mc_gen_match: "!= 0"
@@ -203,11 +213,11 @@ processes:
     split_by_era_group: false
     regions:
       determination:
-        mt: {charge: opposite_sign, wjets_score: {min: 0.15}, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}}
-        et: {charge: opposite_sign, wjets_score: {min: 0.15}, electron_id: pass, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}}
+        mt: {charge: opposite_sign, wjets_score: {min: 0.15}, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}, extra: "0"}
+        et: {charge: opposite_sign, wjets_score: {min: 0.15}, electron_id: pass, mt: {min: 65}, bjet_veto: true, lepton_iso: {max: 0.15}, extra: "1"}
       validation:
-        mt: {charge: opposite_sign, wjets_score: {min: 0.15}, mt: {max: 65}, bjet_veto: true, lepton_iso: {max: 0.15}}
-        et: {charge: opposite_sign, wjets_score: {min: 0.15}, electron_id: pass, mt: {max: 65}, bjet_veto: true, lepton_iso: {max: 0.15}}
+        mt: {charge: opposite_sign, wjets_score: {min: 0.15}, mt: {max: 65}, bjet_veto: true, lepton_iso: {max: 0.15}, extra: "0"}
+        et: {charge: opposite_sign, wjets_score: {min: 0.15}, electron_id: pass, mt: {max: 65}, bjet_veto: true, lepton_iso: {max: 0.15}, extra: "1"}
     selections:
       samples: [mc]
       mc_gen_match: "== 0"
@@ -220,8 +230,8 @@ processes:
     split_by_era_group: false
     regions:
       determination:
-        mt: {charge: opposite_sign, lepton_iso: {max: 0.15}}
-        et: {charge: opposite_sign, lepton_iso: {max: 0.15}}
+        mt: {charge: opposite_sign, lepton_iso: {max: 0.15}, extra: "0"}
+        et: {charge: opposite_sign, lepton_iso: {max: 0.15}, extra: "1"}
     selections:
       samples: [mc]
       mc_gen_match: "== 0"

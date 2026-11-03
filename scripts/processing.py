@@ -150,6 +150,7 @@ def iterate_in_chunks(path, columns=None):
 def select(df, condition, format_dict):
     """Apply a query condition to a DataFrame with formatted strings."""
     formatted_condition = condition.format(**format_dict)
+    #print(f"Applying selection: {formatted_condition}")
     return df.query(formatted_condition).copy()
 
 
@@ -259,14 +260,14 @@ def process_selection(data_path, mc_path, tau_index, file_suffix, output_dir, ba
         aiso_data_df = pd.concat([aiso_data_df, aiso_mc_neg_df], ignore_index=True)
 
     # Add derived features
-    if not iso_data_df.empty:
-        iso_data_df = feature_engineering(iso_data_df, ff_process, channel, tau_index, "data_iso")
-    if not aiso_data_df.empty:
-        aiso_data_df = feature_engineering(aiso_data_df, ff_process, channel, tau_index, "data_aiso")
-    if not iso_mc_df.empty:
-        iso_mc_df = feature_engineering(iso_mc_df, ff_process, channel, tau_index, "mc_iso")
-    if not aiso_mc_df.empty:
-        aiso_mc_df = feature_engineering(aiso_mc_df, ff_process, channel, tau_index, "mc_aiso")
+    # if not iso_data_df.empty:
+    #     iso_data_df = feature_engineering(iso_data_df, ff_process, channel, tau_index, "data_iso")
+    # if not aiso_data_df.empty:
+    #     aiso_data_df = feature_engineering(aiso_data_df, ff_process, channel, tau_index, "data_aiso")
+    # if not iso_mc_df.empty:
+    #     iso_mc_df = feature_engineering(iso_mc_df, ff_process, channel, tau_index, "mc_iso")
+    # if not aiso_mc_df.empty:
+    #     aiso_mc_df = feature_engineering(aiso_mc_df, ff_process, channel, tau_index, "mc_aiso")
 
     # Write output files
     if not iso_data_df.empty:

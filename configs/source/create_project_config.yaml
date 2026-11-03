@@ -2,13 +2,19 @@
 # scripts/make_configs.py builds configs/ from this file and configs/source/create_*_config.yaml.
 # Relative path values under configs/source/ are resolved against storage.real_base.
 # real_base "./" means the REAL repository this file is in.
+#
+# Input files of a sample are found at <ntuple_dir>/<sample_path>, where {sample} in sample_path is
+# replaced by the sample name. sample_path can be a directory (all *.root files in it are used),
+# a single file, or a glob pattern, e.g. "{sample}/cat_res1b/Prod_26_04/data_[0-9]*.root".
+# To read several categories, write {category} and {file} in sample_path and list the categories and
+# their files under ntuple_categories in create_process_config.yaml.
 storage:
-  real_base: path_to_real_repository
+  real_base: /eos/user/c/cgiallom/REAL_test
   fake_factor_base: path_to_classical_fake_factor # if this is not set, the classical fake factor method is disabled -- need to add to MUFFIN tools to make this work
 eras:
   Run3_2022:
     ntuple_dir: path_to_ntuple_production_Run3_2022
-    sample_path: "{sample}/{category}/rest_of_path/{file}"
+    sample_path: "{sample}/rest_of_path"
     data:
       tt:
       - Tau_Run2022C
@@ -54,7 +60,7 @@ eras:
     - ZZ
   Run3_2022EE:
     ntuple_dir: path_to_ntuple_production_Run3_2022EE
-    sample_path: "{sample}/{category}/rest_of_path/{file}"
+    sample_path: "{sample}/rest_of_path"
     data:
       tt:
       - Tau_Run2022E
@@ -102,7 +108,7 @@ eras:
     - ZZ
   Run3_2023:
     ntuple_dir: path_to_ntuple_production_Run3_2023
-    sample_path: "{sample}/{category}/rest_of_path/{file}"
+    sample_path: "{sample}/rest_of_path"
     data:
       tt:
       - Tau_Run2023C_v1
@@ -153,7 +159,7 @@ eras:
     - ZZ
   Run3_2023BPix:
     ntuple_dir: path_to_ntuple_production_Run3_2023BPix
-    sample_path: "{sample}/{category}/rest_of_path/{file}"
+    sample_path: "{sample}/rest_of_path"
     data:
       tt:
       - Tau_Run2023D_v1
@@ -193,65 +199,311 @@ eras:
     - WZ
     - ZZ
   Run3_2024:
-    ntuple_dir: path_to_ntuple_production_Run3_2024
-    sample_path: "{sample}/{category}/rest_of_path/{file}"
+    ntuple_dir: /eos/cms/store/group/phys_higgs/HHbbtautau/MergeCategorization/run3_2024_fullYear/
+    sample_path: "{sample}/{category}/Prod_26_04/{file}"
     data:
       tt:
-      - Tau_Run2024C
-      - Tau_Run2024D
-      - Tau_Run2024E
-      - Tau_Run2024F
-      - Tau_Run2024G
-      - Tau_Run2024H
-      - Tau_Run2024I_v1
-      - Tau_Run2024I_v2
-      mt:
-      - Muon0_Run2024C
-      - Muon0_Run2024D
-      - Muon0_Run2024E
-      - Muon0_Run2024F
-      - Muon0_Run2024G
-      - Muon0_Run2024H
-      - Muon0_Run2024I_v1
-      - Muon0_Run2024I_v2
-      - Muon1_Run2024C
-      - Muon1_Run2024D
-      - Muon1_Run2024E
-      - Muon1_Run2024F
-      - Muon1_Run2024G
-      - Muon1_Run2024H
-      - Muon1_Run2024I_v1
-      - Muon1_Run2024I_v2
+      - Tau_2024C
+      - Tau_2024D
+      - Tau_2024E
+      - Tau_2024F
+      - Tau_2024G
+      - Tau_2024H
+      - Tau_2024I
+      - Tau_2024Iv2
+      # - ParkingHH_2024C
+      # - ParkingHH_2024D
+      # - ParkingHH_2024E
+      # - ParkingHH_2024F
+      # - ParkingHH_2024G
+      # - ParkingHH_2024H
+      # - ParkingHH_2024I
+      # - ParkingHH_2024Iv2
+      # - ParkingVBF0_2024C
+      # - ParkingVBF0_2024D
+      # - ParkingVBF0_2024E
+      # - ParkingVBF0_2024F
+      # - ParkingVBF0_2024G
+      # - ParkingVBF0_2024H
+      # - ParkingVBF0_2024I
+      # - ParkingVBF0_2024Iv2
+      # - ParkingVBF1_2024C
+      # - ParkingVBF1_2024D
+      # - ParkingVBF1_2024E
+      # - ParkingVBF1_2024F
+      # - ParkingVBF1_2024G
+      # - ParkingVBF1_2024H
+      # - ParkingVBF1_2024I
+      # - ParkingVBF1_2024Iv2
+      # - ParkingVBF2_2024C
+      # - ParkingVBF2_2024D
+      # - ParkingVBF2_2024E
+      # - ParkingVBF2_2024F
+      # - ParkingVBF2_2024G
+      # - ParkingVBF2_2024H
+      # - ParkingVBF2_2024I
+      # - ParkingVBF2_2024Iv2
+      # - ParkingVBF3_2024C
+      # - ParkingVBF3_2024D
+      # - ParkingVBF3_2024E
+      # - ParkingVBF3_2024F
+      # - ParkingVBF3_2024G
+      # - ParkingVBF3_2024H
+      # - ParkingVBF3_2024I
+      # - ParkingVBF3_2024Iv2
+      # - ParkingVBF4_2024C
+      # - ParkingVBF4_2024D
+      # - ParkingVBF4_2024E
+      # - ParkingVBF4_2024F
+      # - ParkingVBF4_2024G
+      # - ParkingVBF4_2024H
+      # - ParkingVBF4_2024I
+      # - ParkingVBF4_2024Iv2
+      # - ParkingVBF5_2024C
+      # - ParkingVBF5_2024D
+      # - ParkingVBF5_2024E
+      # - ParkingVBF5_2024F
+      # - ParkingVBF5_2024G
+      # - ParkingVBF5_2024H
+      # - ParkingVBF5_2024I
+      # - ParkingVBF5_2024Iv2
+      # - ParkingVBF6_2024C
+      # - ParkingVBF6_2024D
+      # - ParkingVBF6_2024E
+      # - ParkingVBF6_2024F
+      # - ParkingVBF6_2024G
+      # - ParkingVBF6_2024H
+      # - ParkingVBF6_2024I
+      # - ParkingVBF6_2024Iv2
+      # - ParkingVBF7_2024C
+      # - ParkingVBF7_2024D
+      # - ParkingVBF7_2024E
+      # - ParkingVBF7_2024F
+      # - ParkingVBF7_2024G
+      # - ParkingVBF7_2024H
+      # - ParkingVBF7_2024I
+      # - ParkingVBF7_2024Iv2
+      # mt:
+      # - Muon0_2024C
+      # - Muon0_2024D
+      # - Muon0_2024E
+      # - Muon0_2024F
+      # - Muon0_2024G
+      # - Muon0_2024H
+      # - Muon0_2024I
+      # - Muon0_2024Iv2
+      # - Muon1_2024C
+      # - Muon1_2024D
+      # - Muon1_2024E
+      # - Muon1_2024F
+      # - Muon1_2024G
+      # - Muon1_2024H
+      # - Muon1_2024I
+      # - Muon1_2024Iv2
+      # - ParkingVBF0_2024C
+      # - ParkingVBF0_2024D
+      # - ParkingVBF0_2024E
+      # - ParkingVBF0_2024F
+      # - ParkingVBF0_2024G
+      # - ParkingVBF0_2024H
+      # - ParkingVBF0_2024I
+      # - ParkingVBF0_2024Iv2
+      # - ParkingVBF1_2024C
+      # - ParkingVBF1_2024D
+      # - ParkingVBF1_2024E
+      # - ParkingVBF1_2024F
+      # - ParkingVBF1_2024G
+      # - ParkingVBF1_2024H
+      # - ParkingVBF1_2024I
+      # - ParkingVBF1_2024Iv2
+      # - ParkingVBF2_2024C
+      # - ParkingVBF2_2024D
+      # - ParkingVBF2_2024E
+      # - ParkingVBF2_2024F
+      # - ParkingVBF2_2024G
+      # - ParkingVBF2_2024H
+      # - ParkingVBF2_2024I
+      # - ParkingVBF2_2024Iv2
+      # - ParkingVBF3_2024C
+      # - ParkingVBF3_2024D
+      # - ParkingVBF3_2024E
+      # - ParkingVBF3_2024F
+      # - ParkingVBF3_2024G
+      # - ParkingVBF3_2024H
+      # - ParkingVBF3_2024I
+      # - ParkingVBF3_2024Iv2
+      # - ParkingVBF4_2024C
+      # - ParkingVBF4_2024D
+      # - ParkingVBF4_2024E
+      # - ParkingVBF4_2024F
+      # - ParkingVBF4_2024G
+      # - ParkingVBF4_2024H
+      # - ParkingVBF4_2024I
+      # - ParkingVBF4_2024Iv2
+      # - ParkingVBF5_2024C
+      # - ParkingVBF5_2024D
+      # - ParkingVBF5_2024E
+      # - ParkingVBF5_2024F
+      # - ParkingVBF5_2024G
+      # - ParkingVBF5_2024H
+      # - ParkingVBF5_2024I
+      # - ParkingVBF5_2024Iv2
+      # - ParkingVBF6_2024C
+      # - ParkingVBF6_2024D
+      # - ParkingVBF6_2024E
+      # - ParkingVBF6_2024F
+      # - ParkingVBF6_2024G
+      # - ParkingVBF6_2024H
+      # - ParkingVBF6_2024I
+      # - ParkingVBF6_2024Iv2
+      # - ParkingVBF7_2024C
+      # - ParkingVBF7_2024D
+      # - ParkingVBF7_2024E
+      # - ParkingVBF7_2024F
+      # - ParkingVBF7_2024G
+      # - ParkingVBF7_2024H
+      # - ParkingVBF7_2024I
+      # - ParkingVBF7_2024Iv2
       et:
-      - EGamma0_Run2024C
-      - EGamma0_Run2024D
-      - EGamma0_Run2024E
-      - EGamma0_Run2024F
-      - EGamma0_Run2024G
-      - EGamma0_Run2024H
-      - EGamma0_Run2024I_v1
-      - EGamma0_Run2024I_v2
-      - EGamma1_Run2024C
-      - EGamma1_Run2024D
-      - EGamma1_Run2024E
-      - EGamma1_Run2024F
-      - EGamma1_Run2024G
-      - EGamma1_Run2024H
-      - EGamma1_Run2024I_v1
-      - EGamma1_Run2024I_v2
+      - EGamma0_2024C
+      - EGamma0_2024D
+      - EGamma0_2024E
+      - EGamma0_2024F
+      - EGamma0_2024G
+      - EGamma0_2024H
+      - EGamma0_2024I
+      - EGamma0_2024Iv2
+      - EGamma1_2024C
+      - EGamma1_2024D
+      - EGamma1_2024E
+      - EGamma1_2024F
+      - EGamma1_2024G
+      - EGamma1_2024H
+      - EGamma1_2024I
+      - EGamma1_2024Iv2
+      # - ParkingVBF0_2024C
+      # - ParkingVBF0_2024D
+      # - ParkingVBF0_2024E
+      # - ParkingVBF0_2024F
+      # - ParkingVBF0_2024G
+      # - ParkingVBF0_2024H
+      # - ParkingVBF0_2024I
+      # - ParkingVBF0_2024Iv2
+      # - ParkingVBF1_2024C
+      # - ParkingVBF1_2024D
+      # - ParkingVBF1_2024E
+      # - ParkingVBF1_2024F
+      # - ParkingVBF1_2024G
+      # - ParkingVBF1_2024H
+      # - ParkingVBF1_2024I
+      # - ParkingVBF1_2024Iv2
+      # - ParkingVBF2_2024C
+      # - ParkingVBF2_2024D
+      # - ParkingVBF2_2024E
+      # - ParkingVBF2_2024F
+      # - ParkingVBF2_2024G
+      # - ParkingVBF2_2024H
+      # - ParkingVBF2_2024I
+      # - ParkingVBF2_2024Iv2
+      # - ParkingVBF3_2024C
+      # - ParkingVBF3_2024D
+      # - ParkingVBF3_2024E
+      # - ParkingVBF3_2024F
+      # - ParkingVBF3_2024G
+      # - ParkingVBF3_2024H
+      # - ParkingVBF3_2024I
+      # - ParkingVBF3_2024Iv2
+      # - ParkingVBF4_2024C
+      # - ParkingVBF4_2024D
+      # - ParkingVBF4_2024E
+      # - ParkingVBF4_2024F
+      # - ParkingVBF4_2024G
+      # - ParkingVBF4_2024H
+      # - ParkingVBF4_2024I
+      # - ParkingVBF4_2024Iv2
+      # - ParkingVBF5_2024C
+      # - ParkingVBF5_2024D
+      # - ParkingVBF5_2024E
+      # - ParkingVBF5_2024F
+      # - ParkingVBF5_2024G
+      # - ParkingVBF5_2024H
+      # - ParkingVBF5_2024I
+      # - ParkingVBF5_2024Iv2
+      # - ParkingVBF6_2024C
+      # - ParkingVBF6_2024D
+      # - ParkingVBF6_2024E
+      # - ParkingVBF6_2024F
+      # - ParkingVBF6_2024G
+      # - ParkingVBF6_2024H
+      # - ParkingVBF6_2024I
+      # - ParkingVBF6_2024Iv2
+      # - ParkingVBF7_2024C
+      # - ParkingVBF7_2024D
+      # - ParkingVBF7_2024E
+      # - ParkingVBF7_2024F
+      # - ParkingVBF7_2024G
+      # - ParkingVBF7_2024H
+      # - ParkingVBF7_2024I
+      # - ParkingVBF7_2024Iv2
     mc:
-    - DYto2E_MLL_50_amcatnloFXFX
-    - DYto2Mu_MLL_50_amcatnloFXFX
-    - DYto2Tau_MLL_50_amcatnloFXFX
-    - WtoENu_madgraphMLM
-    - WtoMuNu_madgraphMLM
-    - WtoTauNu_madgraphMLM
-    - TTto2L2Nu
-    - TTtoLNu2Q
-    - WW
-    - WZ
-    - ZZ
-    - ST_tW_top_2L2Nu
-    - ST_tW_antitop_2L2Nu
-    - ST_tW_top_LNu2Q
-    - ST_tW_antitop_LNu2Q
+      - DYto2Tau-2Jets_MLL-50_0J
+      - DYto2Tau-2Jets_MLL-50_1J
+      - DYto2Tau-2Jets_MLL-50_2J
+      - DYto2E-2Jets_MLL-50_0J
+      - DYto2E-2Jets_MLL-50_1J
+      - DYto2E-2Jets_MLL-50_2J
+      - DYto2Mu-2Jets_MLL-50_0J
+      - DYto2Mu-2Jets_MLL-50_1J
+      - DYto2Mu-2Jets_MLL-50_2J
+      - TTto2L2Nu
+      - TTtoLNu2Q
+      - TTto4Q
+      - WtoLNu-2Jets_PTLNu-40to100_1J
+      - WtoLNu-2Jets_PTLNu-40to100_2J
+      - WtoLNu-2Jets_PTLNu-100to200_1J
+      - WtoLNu-2Jets_PTLNu-100to200_2J
+      - WtoLNu-2Jets_PTLNu-200to400_1J
+      - WtoLNu-2Jets_PTLNu-200to400_2J
+      - WtoLNu-2Jets_PTLNu-400to600_1J
+      - WtoLNu-2Jets_PTLNu-400to600_2J
+      - WtoLNu-2Jets_PTLNu-600_1J
+      - WtoLNu-2Jets_PTLNu-600_2J
+      - GluGluHToTauTau
+      - GluGluHto2B
+      - VBFHToTauTau
+      - VBFHto2B
+      - WminusHTo2Tau
+      - WplusHTo2Tau
+      - ZHto2Tau
+      - ZH_Hto2B_Zto2L
+      - ZH_Hto2B_Zto2Q
+      - WminusH_Hto2B_Wto2Q
+      - WminusH_Hto2B_WtoLNu
+      - WplusH_Hto2B_Wto2Q
+      - WplusH_Hto2B_WtoLNu
+      - ggZH_Hto2B_Zto2L
+      - ggZH_Hto2B_Zto2Q
+      - TWminusto2L2Nu
+      - TWminustoLNu2Q
+      - TWminusto4Q
+      - TbarWplusto2L2Nu
+      - TbarWplustoLNu2Q
+      - TbarWplusto4Q
+      - TTHto2B
+      - TTHtoNon2B
+      - TTWH
+      - TTWW
+      - WW
+      - WZ
+      - ZZ
+      - WWW
+      - WWZ
+      - WZZ
+      - ZZZ
+      - TTWZ
+      - TBbarQto2Q_t-channel
+      - TBbarQtoLNu_t-channel
+      - TbarBQto2Q_t-channel
+      - TbarBQtoLNu_t-channel
+      - TBbartoLplusNuBbar-s-channel
+      - TbarBtoLminusNuB-s-channel
