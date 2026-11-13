@@ -33,6 +33,7 @@ parser.add_argument('--binary', action='store_true', help='If set, trains a bina
 parser.add_argument('--file_format', type=str, choices=['parquet', 'root'], default='parquet', help='Input file format (default: parquet)')
 parser.add_argument('--tree_name', type=str, default='ntuple', help='Name of the ROOT tree to read (default: ntuple)')
 parser.add_argument('--legend_label', type=str, default="", help='Custom label for plots (default: empty string)')
+parser.add_argument('--category', type=str, default=None, help='Ntuple category to train on (e.g. cat_res1b). Default: train each category of configs/<era>/input_files.yaml in turn, as processing.py does.')
 
 args = parser.parse_args()
 
@@ -242,9 +243,29 @@ def find_optimal_temperature(logits, y_true, sample_weight=None, binary=False):
     return float(res.x)
 
 
-def file_maps(era_config, channel, ff_process, tau_suffix):
+def get_ntuple_categories(era):
+    """Ntuple categories of an era, as in processing.py: the keys of sample_paths in
+    configs/<era>/input_files.yaml, or [None] when the era has no categories."""
+    cfg_path = Path(f"configs/{era}/input_files.yaml")
+    if not cfg_path.exists():
+        return [None]
+    with cfg_path.open("r") as f:
+        sample_paths = yaml.safe_load(f).get("sample_paths")
+    return list(sample_paths) if isinstance(sample_paths, dict) else [None]
+
+
+def category_path(path, category):
+    """Insert the ntuple category before the extension, as processing.py names its outputs:
+    data_iso_tt_sublead.parquet -> data_iso_tt_sublead_cat_res1b.parquet."""
+    if not category:
+        return path
+    stem, ext = os.path.splitext(path)
+    return f"{stem}_{category}{ext}"
+
+
+def file_maps(era_config, channel, ff_process, tau_suffix, category=None):
     """Build era->path maps. For WjetsMC/ttbarMC (no data) return data maps as None."""
-    logging.info(f"Processing channel: {channel}, process: {ff_process}, global variables: {global_setting}")
+    logging.info(f"Processing channel: {channel}, process: {ff_process}, global variables: {global_setting}, category: {category or '(none)'}")
 
     include_data = ff_process not in ['WjetsMC', 'ttbarMC']
     data_iso_map = {} if include_data else None
@@ -252,11 +273,13 @@ def file_maps(era_config, channel, ff_process, tau_suffix):
     mc_iso_map, mc_aiso_map = {}, {}
 
     for era, paths in era_config.items():
-        mc_iso_map[era] = paths['mc_iso_file'].format(ff_process=ff_process, channel=channel, tau_suffix=tau_suffix)
-        mc_aiso_map[era] = paths['mc_aiso_file'].format(ff_process=ff_process, channel=channel, tau_suffix=tau_suffix)
+        def fmt(key):
+            return category_path(paths[key].format(ff_process=ff_process, channel=channel, tau_suffix=tau_suffix), category)
+        mc_iso_map[era] = fmt('mc_iso_file')
+        mc_aiso_map[era] = fmt('mc_aiso_file')
         if include_data:
-            data_iso_map[era] = paths['data_iso_file'].format(ff_process=ff_process, channel=channel, tau_suffix=tau_suffix)
-            data_aiso_map[era] = paths['data_aiso_file'].format(ff_process=ff_process, channel=channel, tau_suffix=tau_suffix)
+            data_iso_map[era] = fmt('data_iso_file')
+            data_aiso_map[era] = fmt('data_aiso_file')
         else:
             logging.warning(f"Data files not used for {ff_process} in {channel} channel.")
     return data_iso_map, data_aiso_map, mc_iso_map, mc_aiso_map
@@ -941,7 +964,25 @@ with open(args.config, "r") as f:
 
 # Retrieve Config Parameters
 era_cfg = config['era']
+
+# Ntuple categories: without --category, train each category in turn (one separate model each),
+# by re-running this script with --category, as processing.py loops over them.
+categories = sorted({c for era in era_cfg for c in get_ntuple_categories(era)}, key=lambda c: c or "")
+if args.category is None and categories != [None]:
+    import subprocess, sys
+    logging.info(f"Training each ntuple category separately: {', '.join(categories)}")
+    failed = []
+    for cat in categories:
+        logging.info(f"==== Category {cat} ====")
+        if subprocess.run([sys.executable] + sys.argv + ["--category", cat]).returncode != 0:
+            logging.error(f"Training failed for category {cat}")
+            failed.append(cat)
+    sys.exit(1 if failed else 0)
+category = args.category
+
 output_dir = config['output_dir'].format(channel=channel, ff_process=ff_process, global_prefix=global_prefix)
+if category:
+    output_dir = os.path.join(output_dir, category)
 os.makedirs(output_dir, exist_ok=True)
 training_cfg = config['training']
 hyperparameters_cfg = config['hyperparameters']
@@ -953,14 +994,12 @@ CMS_LABEL = dict(data=True, label=args.legend_label, com=13.6, loc=0, lumi=lumi)
 # Combined dataframes
 combined_dfs = []
 
-if channel == "tt":
-    logging.info("Running joint training for both taus in tt channel.")
-    tau_suffix = ['lead', 'sublead']
-elif channel in ["et", "mt"]:
-    tau_suffix = ["sublead"]
+# tt: only the subleading tau is measured. Legs are ordered by VSjet (dau1 >= dau2), so only
+# dau2 can be anti-isolated, as in processing.py and the CCLUB FF regions.
+tau_suffix = ["sublead"]
 
 for tau_suffix in tau_suffix:
-    data_iso_map, data_aiso_map, mc_iso_map, mc_aiso_map = file_maps(era_cfg, channel, ff_process, tau_suffix)
+    data_iso_map, data_aiso_map, mc_iso_map, mc_aiso_map = file_maps(era_cfg, channel, ff_process, tau_suffix, category)
 
     # Load branches with appropriate features
     branches = feature_list(training_cfg, channel, ff_process, tau_suffix, global_setting)
@@ -1172,6 +1211,8 @@ slices = {
     "sublead": (combined_df.loc[y_test.index, "is_lead_tau"] == 0).values,
 }
 for name, m in slices.items():
+    if not m.any():
+        continue  # e.g. no lead taus since tt trains on the subleading tau only
     ece_b = expected_calibration_error(y_test[m], probs_before[m], sample_weight=weights_test[m], n_bins=15)
     ece_a = expected_calibration_error(y_test[m], probs_after[m],  sample_weight=weights_test[m], n_bins=15)
     print(rf"{name:12s}  ECE before=${ece_b:.4f}$  after=${ece_a:.4f}$  ($\delta={ece_a-ece_b:+.4f}$)")
@@ -1389,7 +1430,8 @@ def pairwise_valid_mask(probs, min_margin=0.0, return_details=False, features=No
             binned_plot("pt",  pt_bins,  "viol_rate_vs_pt.pdf")
             binned_plot("eta", eta_bins, "viol_rate_vs_eta.pdf")
             binned_plot("phi", phi_bins, "viol_rate_vs_phi.pdf")
-            binned_plot("jpt", jpt_bins, "viol_rate_vs_jpt_pt.pdf")
+            if _varmap["jpt"] in df.columns:  # jpt_pt is not available for every era (e.g. 2024 CCLUB ntuples)
+                binned_plot("jpt", jpt_bins, "viol_rate_vs_jpt_pt.pdf")
             binned_plot("dm",  dm_bins,  "viol_rate_vs_decayMode.pdf")
 
             # 2D heatmap: pT vs abs(eta)
