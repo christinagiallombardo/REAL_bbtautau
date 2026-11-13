@@ -60,18 +60,7 @@ CONFIG_DIR = os.path.join(REPO_DIR, "configs")
 SOURCE_DIR = os.path.join(CONFIG_DIR, "source")
 
 # Config keys whose values are paths.
-PATH_KEYS = {
-    "input_folder",
-    "output_dir",
-    "model_path",
-    "train_test_split_path",
-    "optimal_temperature_path",
-    "classical_ff_path",
-    "data_iso_file",
-    "data_aiso_file",
-    "mc_iso_file",
-    "mc_aiso_file",
-}
+PATH_KEYS = {"input_folder", "output_dir"}
 
 
 # ======================================================================================
@@ -146,8 +135,8 @@ def check_storage(storage):
         check_path_exists(value, f"storage.{key}")
 
 def resolve_path(value, storage):
-    # A value that already starts with a storage location is kept. Any other relative path goes under real_base.
-    if value.startswith((storage["real_base"], storage["fake_factor_base"])):
+    # A value that already starts with real_base is kept. Any other relative path goes under real_base.
+    if value.startswith(storage["real_base"]):
         return value
     return os.path.join(storage["real_base"], value)
 
@@ -161,13 +150,6 @@ def resolve_paths(obj, storage):
     if isinstance(obj, list):
         return [resolve_paths(value, storage) for value in obj]
     return obj
-
-
-def write_yaml(content, path):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w") as f:
-        f.write(yaml.safe_dump(content, sort_keys=False, default_flow_style=False, width=200, allow_unicode=True))
-    logger.info(f"wrote {path}")
 
 
 def write_text(lines, path):
@@ -267,15 +249,11 @@ def write_input_files(project, out_dir, ntuple_categories=None):
         write_text(quoted_yaml_lines(content), os.path.join(out_dir, era, "input_files.yaml"))
 
 
-def write_configs(configs, storage, out_dir):
-    for name, cfg in configs.items():
-        write_yaml(resolve_paths(cfg, storage), os.path.join(out_dir, name + ".yaml"))
-
-
 # ======================================================================================
 # Process configs (configs/source/create_process_config.yaml)
 # ======================================================================================
-REGION_KEYS = {"charge", "other_tau", "lepton_iso", "electron_id", "mt", "bjet_veto", "wjets_score", "extra"}
+REGION_KEYS = {"charge", "other_tau", "lepton_iso", "electron_id", "mt", "bjet_veto", "wjets_score", "extra",
+               "trigger_cuts"}
 RANGE_KEYS = {"min", "max"}
 EXTRA_BRACKET_TRIGGER_CHANNELS = {"mt"}
 
@@ -286,9 +264,23 @@ def branch(cfg, name, where):
     return cfg["branches"][name]
 
 
+# DeepTau2018v2p5 WP name -> code of the integer NanoAOD WP branches (cut as >= code)
+WP_CODES = {
+    "wp_jet": {"VVVLoose": 1, "VVLoose": 2, "VLoose": 3, "Loose": 4, "Medium": 5, "Tight": 6, "VTight": 7, "VVTight": 8},
+    "wp_ele": {"VVVLoose": 1, "VVLoose": 2, "VLoose": 3, "Loose": 4, "Medium": 5, "Tight": 6, "VTight": 7, "VVTight": 8},
+    "wp_mu": {"VLoose": 1, "Loose": 2, "Medium": 3, "Tight": 4},
+}
+
+
 def tau_id(cfg, kind, index):
-    # Branches may be per leg (rawDeepTau2018v2p5VSjet_{index}) or a single branch (rawDeepTau2018v2p5VSjet).
+    # Branches may be per leg (dau{index}_tauIdVSjet) or a single branch.
     return cfg["branches"]["tau_id"][kind].replace("{index}", str(index))
+
+
+def wp_code(kind, wp):
+    if not isinstance(wp, str) or wp not in WP_CODES[kind]:
+        raise SystemExit(f"{kind} working point {wp!r} is not valid, give it by name: one of {list(WP_CODES[kind])}")
+    return WP_CODES[kind][wp]
 
 
 def tau_id_per_leg(cfg, kind):
@@ -307,55 +299,50 @@ def range_cuts(variable, bounds, where):
     return cuts
 
 
-def per_channel_vs_jet(cfg):
-    # tau_vs_jet is either one {iso_min, antiiso_range} for all channels or one per channel.
-    return "iso_min" not in cfg["tau_vs_jet"]
+def iso_cut(cfg, index):
+    # passes iso_min
+    return f"({tau_id(cfg, 'wp_jet', index)} >= {wp_code('wp_jet', cfg['tau_vs_jet']['iso_min'])})"
 
 
-def vs_jet_wps(cfg, channel):
-    if not per_channel_vs_jet(cfg):
-        return cfg["tau_vs_jet"]
-    if channel not in cfg["tau_vs_jet"]:
-        raise SystemExit(f"tau_vs_jet has no working points for channel '{channel}'")
-    return cfg["tau_vs_jet"][channel]
-
-
-def iso_inclusive(cfg, channel):
-    # iso_inclusive: true puts the iso_min boundary in iso (>=) instead of anti-iso (<=).
-    return vs_jet_wps(cfg, channel).get("iso_inclusive", False)
-
-
-def iso_cut(cfg, channel, index):
-    op = ">=" if iso_inclusive(cfg, channel) else ">"
-    return f"({tau_id(cfg, 'wp_jet', index)} {op} {vs_jet_wps(cfg, channel)['iso_min']})"
-
-
-def antiiso_cut(cfg, channel, index):
-    low, high = vs_jet_wps(cfg, channel)["antiiso_range"]
+def antiiso_cut(cfg, index):
+    # passes the lower WP of antiiso_range, fails the upper one
+    low, high = cfg["tau_vs_jet"]["antiiso_range"]
     vs_jet = tau_id(cfg, "wp_jet", index)
-    op = "<" if iso_inclusive(cfg, channel) else "<="
-    return f"({vs_jet} {op} {high}) & ({vs_jet} >= {low})"
+    return f"({vs_jet} < {wp_code('wp_jet', high)}) & ({vs_jet} >= {wp_code('wp_jet', low)})"
 
 
-def not_iso_cut(cfg, channel, index):
-    op = "<" if iso_inclusive(cfg, channel) else "<="
-    return f"({tau_id(cfg, 'wp_jet', index)} {op} {vs_jet_wps(cfg, channel)['iso_min']})"
+def not_iso_cut(cfg, index):
+    # fails iso_min
+    return f"({tau_id(cfg, 'wp_jet', index)} < {wp_code('wp_jet', cfg['tau_vs_jet']['iso_min'])})"
 
 
 OTHER_TAU_CUTS = {"iso": iso_cut, "antiiso": antiiso_cut, "not_iso": not_iso_cut}
 
 
-def trigger_cut(cfg, channel, era_group):
+def trigger_cut(cfg, channel, era_group, cut_overrides=None, where=""):
     if channel not in cfg["triggers"]:
         raise SystemExit(f"no triggers defined for channel '{channel}'")
+    # cut_overrides: {trigger name: [cuts]} from the region option trigger_cuts; replaces that trigger's cuts
+    cut_overrides = cut_overrides or {}
+    unknown = set(cut_overrides) - set(cfg["triggers"][channel])
+    if unknown:
+        raise SystemExit(f"{where}: trigger_cuts names unknown triggers {sorted(unknown)} for channel '{channel}'")
     terms = []
     for name, trigger in cfg["triggers"][channel].items():
-        cuts = trigger["cuts"]
+        # flag may be given per era group; false switches the trigger off for that era group
+        flag = trigger["flag"]
+        if isinstance(flag, dict):
+            if era_group not in flag:
+                raise SystemExit(f"trigger {channel}/{name} has no flag for era group '{era_group}'")
+            flag = flag[era_group]
+        if flag is False:
+            continue
+        cuts = cut_overrides.get(name, trigger["cuts"])
         if isinstance(cuts, dict):
             if era_group not in cuts:
                 raise SystemExit(f"trigger {channel}/{name} has no cuts for era group '{era_group}'")
             cuts = cuts[era_group]
-        terms.append(" & ".join([f"({trigger['flag']})"] + [f"({cut})" for cut in cuts]))
+        terms.append(" & ".join([f"({flag})"] + [f"({cut})" for cut in cuts]))
     triggers = " | ".join(f"({term})" for term in terms)
     # The mt triggers are OR-ed inside an extra pair of brackets, as in the hand-written configs.
     return f"(({triggers}))" if channel in EXTRA_BRACKET_TRIGGER_CHANNELS else f"({triggers})"
@@ -396,7 +383,7 @@ def baseline(cfg, channel, opts, era_group, where):
             if not tau_id_per_leg(cfg, "wp_jet"):
                 raise SystemExit(f"{where}: other_tau needs a per-leg VSjet branch, "
                                  f"add _{{index}} to branches.tau_id.wp_jet or remove other_tau")
-            cuts.append(OTHER_TAU_CUTS[value](cfg, channel, "{tau_other_index}"))
+            cuts.append(OTHER_TAU_CUTS[value](cfg, "{tau_other_index}"))
         elif key == "extra":
             if isinstance(value, list):
                 # A list holds complete cut strings.
@@ -409,10 +396,10 @@ def baseline(cfg, channel, opts, era_group, where):
         # Without a per-leg branch all legs share one branch, so only the tightest WP is kept.
         wps = {}
         for leg, wp in legs.items():
-            name = tau_id(cfg, kind, leg)
-            wps[name] = max(wps.get(name, wp), wp)
+            name, value = tau_id(cfg, kind, leg), wp_code(kind, wp)
+            wps[name] = max(wps.get(name, value), value)
         cuts += [f"({name} >= {wp})" for name, wp in wps.items()]
-    cuts.append(trigger_cut(cfg, channel, era_group))
+    cuts.append(trigger_cut(cfg, channel, era_group, opts.get("trigger_cuts"), where))
     return " & ".join(cuts)
 
 
@@ -429,22 +416,10 @@ def categories(cfg, name, process, era_group):
 
 
 def selections(cfg, process):
-    if not per_channel_vs_jet(cfg):
-        return channel_selections(cfg, process, None)
-    # One selections block is shared by all channels, so their VSjet working points must agree.
-    channels = list(dict.fromkeys(ch for region in process["regions"].values() for ch in region))
-    wps = {channel: vs_jet_wps(cfg, channel) for channel in channels}
-    if any(wp != wps[channels[0]] for wp in wps.values()):
-        raise SystemExit(f"tau_vs_jet differs between channels {wps}, but selections are shared by all channels; "
-                         "use one {iso_min, antiiso_range} for all of them")
-    return channel_selections(cfg, process, channels[0])
-
-
-def channel_selections(cfg, process, channel):
     branches = cfg["branches"]
     settings = process["selections"]
-    iso = iso_cut(cfg, channel, "{tau_index}")
-    aiso = antiiso_cut(cfg, channel, "{tau_index}")
+    iso = iso_cut(cfg, "{tau_index}")
+    aiso = antiiso_cut(cfg, "{tau_index}")
     gen_match = f"({branches['gen_match'].replace('{index}', '{tau_index}')} {settings['mc_gen_match']})"
 
     result = {}
